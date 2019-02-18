@@ -138,28 +138,42 @@ Statement Parser::parseStatement()
 		return ExpressionStatement{locationOf(expr), expr};
 	}
 	case Token::Comma:
+	case Token::AssemblyAssign:
 	{
-		// if a comma follows, a multiple assignment is assumed
-
 		if (elementary.type() != typeid(Identifier))
-			fatalParserError("Label name / variable name must precede \",\" (multiple assignment).");
+			fatalParserError(
+				std::string("Variable name must precede ") +
+				(currentToken() == Token::Comma ? "\",\" (multiple assignment)." : "\":=\".")
+			);
+
 		Identifier const& identifier = boost::get<Identifier>(elementary);
+
+		auto checkIdentifier = [this](Identifier const& identifier)
+		{
+			if (m_dialect->builtin(identifier.name))
+				fatalParserError("Cannot assign to builtin function \"" + identifier.name.str() + "\".");
+		};
+
+		checkIdentifier(identifier);
 
 		Assignment assignment = createWithLocation<Assignment>(identifier.location);
 		assignment.variableNames.emplace_back(identifier);
 
-		do
+		// if a comma follows, a multiple assignment is assumed
+		while (currentToken() == Token::Comma)
 		{
 			expectToken(Token::Comma);
 			elementary = parseElementaryOperation();
+
 			if (elementary.type() != typeid(Identifier))
 				fatalParserError("Variable name expected in multiple assignment.");
+
+			checkIdentifier(boost::get<Identifier>(elementary));
+
 			assignment.variableNames.emplace_back(boost::get<Identifier>(elementary));
 		}
-		while (currentToken() == Token::Comma);
 
-		expectToken(Token::Colon);
-		expectToken(Token::Assign);
+		expectToken(Token::AssemblyAssign);
 
 		assignment.value.reset(new Expression(parseExpression()));
 		assignment.location.end = locationOf(*assignment.value).end;
@@ -168,33 +182,19 @@ Statement Parser::parseStatement()
 	case Token::Colon:
 	{
 		if (elementary.type() != typeid(Identifier))
-			fatalParserError("Label name / variable name must precede \":\".");
+			fatalParserError("Label name must precede \":\".");
+
 		Identifier const& identifier = boost::get<Identifier>(elementary);
+
 		advance();
-		// identifier:=: should be parsed as identifier: =: (i.e. a label),
-		// while identifier:= (being followed by a non-colon) as identifier := (assignment).
-		if (currentToken() == Token::Assign && peekNextToken() != Token::Colon)
-		{
-			Assignment assignment = createWithLocation<Assignment>(identifier.location);
-			if (m_dialect->builtin(identifier.name))
-				fatalParserError("Cannot assign to builtin function \"" + identifier.name.str() + "\".");
-			else if (m_dialect->flavour != AsmFlavour::Yul && instructions().count(identifier.name.str()))
-				fatalParserError("Cannot use instruction names for identifier names.");
-			advance();
-			assignment.variableNames.emplace_back(identifier);
-			assignment.value.reset(new Expression(parseExpression()));
-			assignment.location.end = locationOf(*assignment.value).end;
-			return Statement{std::move(assignment)};
-		}
-		else
-		{
-			// label
-			if (m_dialect->flavour != AsmFlavour::Loose)
-				fatalParserError("Labels are not supported.");
-			Label label = createWithLocation<Label>(identifier.location);
-			label.name = identifier.name;
-			return label;
-		}
+
+		// label
+		if (m_dialect->flavour != AsmFlavour::Loose)
+			fatalParserError("Labels are not supported.");
+
+		Label label = createWithLocation<Label>(identifier.location);
+		label.name = identifier.name;
+		return label;
 	}
 	default:
 		if (m_dialect->flavour != AsmFlavour::Loose)
@@ -439,10 +439,9 @@ VariableDeclaration Parser::parseVariableDeclaration()
 		else
 			break;
 	}
-	if (currentToken() == Token::Colon)
+	if (currentToken() == Token::AssemblyAssign)
 	{
-		expectToken(Token::Colon);
-		expectToken(Token::Assign);
+		expectToken(Token::AssemblyAssign);
 		varDecl.value = make_unique<Expression>(parseExpression());
 		varDecl.location.end = locationOf(*varDecl.value).end;
 	}
