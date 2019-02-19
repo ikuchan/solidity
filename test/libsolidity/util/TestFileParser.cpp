@@ -227,7 +227,7 @@ tuple<bytes, ABIType, string> TestFileParser::parseABITypeLiteral()
 		{
 			if (accept(Token::HexNumber))
 			{
-				abiType = ABIType{ABIType::UnsignedDec, ABIType::AlignLeft, 32};
+				abiType = ABIType{ABIType::Hex, ABIType::AlignLeft, 32};
 				string parsed = parseHexNumber();
 				rawString += parsed;
 				return make_tuple(convertHexNumber(parsed), abiType, rawString);
@@ -302,7 +302,8 @@ string TestFileParser::parseHexNumber()
 
 u256 TestFileParser::convertNumber(string const& _literal)
 {
-	try {
+	try
+	{
 		return u256{_literal};
 	}
 	catch (std::exception const&)
@@ -313,13 +314,21 @@ u256 TestFileParser::convertNumber(string const& _literal)
 
 bytes TestFileParser::convertHexNumber(string const& _literal)
 {
-	try {
-		bytes result = fromHex(_literal);
-		return result + bytes(32 - result.size(), 0);
+	try
+	{
+		if (_literal.size() % 2)
+		{
+			throw Error(Error::Type::ParserError, "Hex number encoding invalid.");
+		}
+		else
+		{
+			bytes result = fromHex(_literal);
+			return result + bytes(32 - result.size(), 0);
+		}
 	}
 	catch (std::exception const&)
 	{
-		throw Error(Error::Type::ParserError, "HexNumber encoding invalid.");
+		throw Error(Error::Type::ParserError, "Hex number encoding invalid.");
 	}
 }
 

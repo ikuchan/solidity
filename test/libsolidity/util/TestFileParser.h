@@ -99,13 +99,16 @@ namespace soltest
  */
 struct ABIType
 {
-	enum Type {
+	enum Type
+	{
 		UnsignedDec,
 		SignedDec,
+		Hex,
 		Failure,
 		None
 	};
-	enum Align {
+	enum Align
+	{
 		AlignLeft,
 		AlignRight
 	};

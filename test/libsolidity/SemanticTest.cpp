@@ -58,6 +58,7 @@ namespace
 			switch (param.abiType.type)
 			{
 			case ABIType::SignedDec:
+				soltestAssert(param.abiType.align == ABIType::AlignRight, "");
 				if (*byteRange.begin() & 0x80)
 					resultStream << u2s(fromBigEndian<u256>(byteRange));
 				else
@@ -68,20 +69,18 @@ namespace
 				// be signed. If an unsigned was detected in the expectations,
 				// but the actual result returned a signed, it would be formatted
 				// incorrectly.
-				if (param.abiType.align == ABIType::AlignRight)
-				{
-					if (*byteRange.begin() & 0x80)
-						resultStream << u2s(fromBigEndian<u256>(byteRange));
-					else
-						resultStream << fromBigEndian<u256>(byteRange);
-				}
+				soltestAssert(param.abiType.align == ABIType::AlignRight, "");
+				if (*byteRange.begin() & 0x80)
+					resultStream << u2s(fromBigEndian<u256>(byteRange));
 				else
-				{
-					byteRange.erase(
-						std::remove(byteRange.begin(), byteRange.end(), 0), byteRange.end()
-					);
-					resultStream << toHex(byteRange, HexPrefix::Add);
-				}
+					resultStream << fromBigEndian<u256>(byteRange);
+				break;
+			case ABIType::Hex:
+				soltestAssert(param.abiType.align == ABIType::AlignLeft, "");
+				byteRange.erase(
+					std::remove(byteRange.begin(), byteRange.end(), 0), byteRange.end()
+				);
+				resultStream << toHex(byteRange, HexPrefix::Add);
 				break;
 			case ABIType::Failure:
 				break;
